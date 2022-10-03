@@ -21,7 +21,8 @@ extern "C" {
 }
 
 constexpr char UA_PADDING = ' ';
-constexpr char UA_STR[] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:91.0) Gecko/20100101 Firefox/91.0";
+constexpr char UA_STR[] = "User-Agent: MicroMessage Client";
+constexpr char UA_STR2[] = "UA: None";
 constexpr size_t UA_BUFFER_LENGTH = 1500; //常见MTU
 constexpr int NFQNL_COPY_PACKET_SIZE = 0xffff;
 const size_t sizeof_buf = NFQNL_COPY_PACKET_SIZE + (MNL_SOCKET_BUFFER_SIZE / 2);
@@ -71,7 +72,7 @@ private:
 
 class TcpOptionsScanner {
 public:
-    explicit TcpOptionsScanner(const tcphdr * const tcpPkHdl) noexcept :
+    explicit TcpOptionsScanner(const tcphdr * const tcpPkHdl) noexcept ://tcphdr是tcp头部的意思
     tcpOptionsStart(reinterpret_cast<const char*>(tcpPkHdl) + sizeof(tcphdr)),
     curr(tcpOptionsStart),
     bound(reinterpret_cast<const char*>(tcpPkHdl) + tcpPkHdl->doff * 4)
@@ -264,11 +265,20 @@ static bool modify_ua(const char *const uaPointer, const char *const tcpPkPayloa
         ++currStatus.uaFrag;
         return false;
     }
-    constexpr static auto ua_result = meta_cat_ua_and_padding<UA_BUFFER_LENGTH>(UA_STR, UA_PADDING);
+    bool micromessageclient =false;
+    //14:i,15:c
+    try{
+        if(uaStartPointer[14] == "i" && usStartPointer[15] == "c")
+            micromessageclient = true;//这里可以加入算法库
+    }
+    catch(){
+        micromessageclient = false;//这里做一个异常处理主要是为了防止有些程序提供很短的ua导致程序出现异常
+    }
+    constexpr static auto ua_result = meta_cat_ua_and_padding<UA_BUFFER_LENGTH>(micromessageclient?UA_STR2:UA_STR, UA_PADDING);
     const bool nfq_tcp_mangle_succeed = (
             isIPv4 ?
-            nfq_tcp_mangle_ipv4(pktb, uaOffset, uaLength, ua_result.data(), uaLength) :
-            nfq_tcp_mangle_ipv6(pktb, uaOffset, uaLength, ua_result.data(), uaLength)
+            nfq_tcp_mangle_ipv4(pktb, uaOffset - 12, uaLength + 12, ua_result.data(), uaLength + 12) :
+            nfq_tcp_mangle_ipv6(pktb, uaOffset - 12, uaLength + 12, ua_result.data(), uaLength + 12)//尝试新的思路，直接去除User-Agent标识，其实是修改（
             ) == 1;
     if (nfq_tcp_mangle_succeed) {
         ++currStatus.uaCount;
