@@ -21,8 +21,7 @@ extern "C" {
 }
 
 constexpr char UA_PADDING = ' ';
-constexpr char UA_STR[] = "User-Agent: MicroMessage Client";
-constexpr char UA_STR2[] = "UA: None";
+constexpr char UA_STR[] = "UA: None";
 constexpr size_t UA_BUFFER_LENGTH = 1500; //常见MTU
 constexpr int NFQNL_COPY_PACKET_SIZE = 0xffff;
 const size_t sizeof_buf = NFQNL_COPY_PACKET_SIZE + (MNL_SOCKET_BUFFER_SIZE / 2);
@@ -98,7 +97,7 @@ private:
     const char * const bound;
 };
 
-template<size_t total_len, size_t ua_inner_length, size_t ua_length = ua_inner_length - 1, size_t result_inner_len = total_len + 1>
+template<size_t total_len, size_t ua_inner_length, size_t ua_length = ua_inner_length - 1, size_t result_inner_len = total_len + 1>//类模板？
 static constexpr array<char, result_inner_len> meta_cat_ua_and_padding(const char(&ua)[ua_inner_length], const char ch) noexcept {
     static_assert(total_len > 0 && ua_inner_length > 0 && ua_length > 0 && total_len > ua_inner_length && result_inner_len > total_len);
 
@@ -198,8 +197,8 @@ static void nfq_send_verdict(const int queue_num, const uint32_t id, pkt_buff * 
 }
 
 static bool mangleIpv4Id(pkt_buff *const pktb) noexcept {
-    static atomic<decltype(iphdr::id)> currIpId = clock();
-    auto const nextIpId = htons(++currIpId);
+    static atomic<decltype(iphdr::id)> currIpId = clock();//原子类型
+    auto const nextIpId = htons(++currIpId);//auto类似于csharp的var？
     auto const nextIpIdPtr = reinterpret_cast<const char*>(&nextIpId);
     constexpr static unsigned int matchOffset = offsetof(iphdr, id);
     constexpr static unsigned int len = sizeof(iphdr::id);
@@ -253,7 +252,7 @@ static bool modify_ua(const char *const uaPointer, const char *const tcpPkPayloa
         return false;
     }
     unsigned int uaLength = 0;
-    const char * const uaStartPointer = uaPointer + 14;
+    const char * const uaStartPointer = uaPointer + 14;//uaStartPointer已经包含了前面\rUser-Agent: 字段了
     const unsigned int uaLengthBound = tcpPkLen - uaOffset;
     for (unsigned int i = 0; i < uaLengthBound; ++i) {
         if (uaStartPointer[i] == '\r') {
@@ -267,14 +266,19 @@ static bool modify_ua(const char *const uaPointer, const char *const tcpPkPayloa
     }
     bool micromessageclient =false;
     //14:i,15:c
+    //MicroMessage Client
+    //0123456789012345678
     try{
-        if(uaStartPointer[14] == "i" && usStartPointer[15] == "c")
+        if(uaStartPointer[1] == "i" && usStartPointer[2] == "c"){
             micromessageclient = true;//这里可以加入算法库
+            syslog(LOG_ERR, "MicroMessageClient Deceted! Skip~");
+            return false;//这里直接不处理吧
+        }
     }
     catch(){
         micromessageclient = false;//这里做一个异常处理主要是为了防止有些程序提供很短的ua导致程序出现异常
     }
-    constexpr static auto ua_result = meta_cat_ua_and_padding<UA_BUFFER_LENGTH>(micromessageclient?UA_STR2:UA_STR, UA_PADDING);
+    constexpr static auto ua_result = meta_cat_ua_and_padding<UA_BUFFER_LENGTH>(UA_STR, UA_PADDING);//前面直接return了，应该也轮不到这里执行了，可以直接返回UA_STR
     const bool nfq_tcp_mangle_succeed = (
             isIPv4 ?
             nfq_tcp_mangle_ipv4(pktb, uaOffset - 12, uaLength + 12, ua_result.data(), uaLength + 12) :
