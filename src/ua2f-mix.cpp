@@ -269,13 +269,14 @@ static bool modify_ua(const char *const uaPointer, const char *const tcpPkPayloa
     //MicroMessage Client
     //0123456789012345678
     try{
-        if(uaStartPointer[1] == "i" && usStartPointer[2] == "c"){
+        if (uaStartPointer[1] == 'i' && uaStartPointer[2] == 'c') {
             micromessageclient = true;//这里可以加入算法库
             syslog(LOG_ERR, "MicroMessageClient Deceted! Skip~");
             return false;//这里直接不处理吧
         }
     }
-    catch(){
+    catch(char *s)
+    {
         micromessageclient = false;//这里做一个异常处理主要是为了防止有些程序提供很短的ua导致程序出现异常
     }
     constexpr static auto ua_result = meta_cat_ua_and_padding<UA_BUFFER_LENGTH>(UA_STR, UA_PADDING);//前面直接return了，应该也轮不到这里执行了，可以直接返回UA_STR
